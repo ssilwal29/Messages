@@ -1,3 +1,18 @@
+# Dude Gateway
+
+> **This is a modified version of [Fossify Messages](https://github.com/FossifyOrg/Messages).**
+> It was changed in October 2026, starting from upstream commit `7fd846af`, to become Dude Gateway:
+> an SMS/MMS gateway for one dedicated Android phone that reports the messages it receives to a
+> TheDude server and sends the replies the server queues for it. It installs as `app.thedude.gateway`.
+> The new code lives in `app/src/main/kotlin/org/fossify/messages/gateway`; the changes to Fossify's own
+> files are listed in [GATEWAY.md](GATEWAY.md).
+>
+> Like the original, it is free software under the GNU General Public License v3.0 (see [LICENSE](LICENSE)).
+> It is not made, endorsed or supported by the Fossify project; please don't report its bugs to them.
+> Fossify's original README follows.
+
+---
+
 # Fossify Messages
 <img alt="Logo" src="graphics/icon.webp" width="120" />
 

@@ -35,6 +35,40 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- Dude Gateway -->
+            <TextView
+                android:id="@+id/settings_gateway_label"
+                style="@style/SettingsSectionLabelStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/gateway_title" />
+
+            <RelativeLayout
+                android:id="@+id/settings_gateway_holder"
+                style="@style/SettingsHolderTextViewStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/settings_gateway_entry"
+                    style="@style/SettingsTextLabelStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/gateway_settings_entry" />
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/settings_gateway_summary"
+                    style="@style/SettingsTextValueStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/settings_gateway_entry" />
+
+            </RelativeLayout>
+
+            <include
+                android:id="@+id/settings_gateway_divider"
+                layout="@layout/divider" />
+
             <TextView
                 android:id="@+id/settings_color_customization_section_label"
                 style="@style/SettingsSectionLabelStyle"

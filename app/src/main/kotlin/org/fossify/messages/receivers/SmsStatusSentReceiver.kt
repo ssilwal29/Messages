@@ -17,6 +17,7 @@ import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.messagingUtils
 import org.fossify.messages.extensions.notificationHelper
+import org.fossify.messages.gateway.GatewayHooks
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 
@@ -38,6 +39,7 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
             errorCode = intent.getIntExtra(EXTRA_ERROR_CODE, NO_ERROR_CODE),
             noDefault = intent.getBooleanExtra(EXTRA_NO_DEFAULT, false)
         )
+        GatewayHooks.onSmsSent(context, intent, receiverResultCode)
     }
 
     override fun updateAppDatabase(context: Context, intent: Intent, receiverResultCode: Int) {

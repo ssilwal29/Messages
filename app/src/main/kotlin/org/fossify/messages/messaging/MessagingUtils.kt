@@ -24,8 +24,9 @@ class MessagingUtils(val context: Context) {
 
     /**
      * Insert an SMS to the given URI with thread_id specified.
+     * Internal (not private) so Dude Gateway can file its replies in the exact thread they're addressed to.
      */
-    private fun insertSmsMessage(
+    internal fun insertSmsMessage(
         subId: Int,
         dest: String,
         text: String,
@@ -161,7 +162,6 @@ class MessagingUtils(val context: Context) {
         settings: Settings,
         messageId: Long? = null
     ) {
-        val transaction = Transaction(context, settings)
         val message = Message(text, addresses.toTypedArray())
 
         if (attachment != null) {
@@ -186,10 +186,14 @@ class MessagingUtils(val context: Context) {
 
         val mmsSentIntent = Intent(context, MmsSentReceiver::class.java)
         mmsSentIntent.putExtra(MmsSentReceiver.EXTRA_ORIGINAL_RESENT_MESSAGE_ID, messageId)
-        transaction.setExplicitBroadcastForSentMms(mmsSentIntent)
 
         try {
-            transaction.sendNewMessage(message)
+            // Transaction keeps its settings in a static field, and Dude Gateway sends with its own settings.
+            synchronized(Transaction::class.java) {
+                val transaction = Transaction(context, settings)
+                transaction.setExplicitBroadcastForSentMms(mmsSentIntent)
+                transaction.sendNewMessage(message)
+            }
         } catch (e: Exception) {
             context.showErrorToast(e)
         }

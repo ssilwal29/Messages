@@ -115,7 +115,8 @@ android {
         )
     }
 
-    namespace = project.property("APP_ID").toString()
+    // The Kotlin package (and so R and BuildConfig) stays org.fossify.messages; only the applicationId changes.
+    namespace = "org.fossify.messages"
 
     lint {
         checkReleaseBuilds = false
@@ -139,6 +140,18 @@ detekt {
     allRules = false
 }
 
+// Dude Gateway: the gateway's unit tests run on the JVM, where OkHttp's Android build fails looking for Android
+// (android.util.Log, Build.VERSION). Give the unit tests OkHttp's JVM build; the app keeps the Android one.
+configurations.matching {
+    it.name.endsWith("UnitTestRuntimeClasspath") || it.name.endsWith("HostTestRuntimeClasspath")
+}.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("com.squareup.okhttp3:okhttp"))
+            .using(module("com.squareup.okhttp3:okhttp-jvm:${libs.versions.okhttp.get()}"))
+            .because("JVM unit tests need OkHttp's JVM platform")
+    }
+}
+
 dependencies {
     implementation(libs.fossify.commons)
     implementation(libs.eventbus)
@@ -152,5 +165,12 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.bundles.room)
     ksp(libs.androidx.room.compiler)
+    // Dude Gateway
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.sse)
+    implementation(libs.libphonenumber)
+    implementation(libs.androidx.work.runtime)
+    testImplementation(libs.junit)
+    testImplementation(libs.okhttp.mockwebserver)
     detektPlugins(libs.compose.detekt)
 }

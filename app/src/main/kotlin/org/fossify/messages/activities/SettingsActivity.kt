@@ -35,6 +35,8 @@ import org.fossify.messages.dialogs.ExportMessagesDialog
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.emptyMessagesRecycleBin
 import org.fossify.messages.extensions.messagesDB
+import org.fossify.messages.gateway.GatewayActivity
+import org.fossify.messages.gateway.GatewayHooks
 import org.fossify.messages.helpers.FILE_SIZE_100_KB
 import org.fossify.messages.helpers.FILE_SIZE_1_MB
 import org.fossify.messages.helpers.FILE_SIZE_200_KB
@@ -119,6 +121,7 @@ class SettingsActivity : SimpleActivity() {
         setupAppPasswordProtection()
         setupMessagesExport()
         setupMessagesImport()
+        setupGateway()
         updateTextColors(binding.settingsNestedScrollview)
 
         if (
@@ -128,6 +131,7 @@ class SettingsActivity : SimpleActivity() {
         }
 
         arrayOf(
+            binding.settingsGatewayLabel,
             binding.settingsColorCustomizationSectionLabel,
             binding.settingsGeneralSettingsLabel,
             binding.settingsOutgoingMessagesLabel,
@@ -139,6 +143,23 @@ class SettingsActivity : SimpleActivity() {
         ).forEach {
             it.setTextColor(getProperPrimaryColor())
         }
+    }
+
+    /** Dude Gateway: its entry, and the settings it overrides hidden while it's on. */
+    private fun setupGateway() = binding.apply {
+        val gatewayOn = GatewayHooks.isEnabled(this@SettingsActivity)
+        settingsGatewaySummary.setText(
+            if (gatewayOn) R.string.gateway_settings_entry_summary_on else R.string.gateway_settings_entry_summary_off
+        )
+        settingsGatewayHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, GatewayActivity::class.java))
+        }
+        arrayOf(
+            settingsSendGroupMessageMmsHolder,
+            settingsEnableDeliveryReportsHolder,
+            settingsManageBlockedNumbersHolder,
+            settingsManageBlockedKeywordsHolder,
+        ).forEach { it.beVisibleIf(!gatewayOn) }
     }
 
     private fun setupMessagesExport() {

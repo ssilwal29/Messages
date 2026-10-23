@@ -164,7 +164,7 @@
     <ID>SwallowedException:VCardParser.kt$e: Exception</ID>
     <ID>ThrowingExceptionsWithoutMessageOrCause:AttachmentUtils.kt$AttachmentUtils$IllegalStateException()</ID>
     <ID>ThrowingExceptionsWithoutMessageOrCause:MessagesImporter.kt$MessagesImporter$IllegalStateException()</ID>
-    <ID>ThrowsCount:SmsSender.kt$SmsSender$fun sendMessage( subId: Int, destination: String, body: String, serviceCenter: String?, requireDeliveryReport: Boolean, messageUri: Uri )</ID>
+    <ID>ThrowsCount:SmsSender.kt$SmsSender$fun sendMessage( subId: Int, destination: String, body: String, serviceCenter: String?, requireDeliveryReport: Boolean, messageUri: Uri, gatewayOutboxId: String? = null )</ID>
     <ID>TooGenericExceptionCaught:Activity.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ArchivedConversationsActivity.kt$ArchivedConversationsActivity$e: Exception</ID>
     <ID>TooGenericExceptionCaught:BlockedKeywordsExporter.kt$BlockedKeywordsExporter$e: Exception</ID>

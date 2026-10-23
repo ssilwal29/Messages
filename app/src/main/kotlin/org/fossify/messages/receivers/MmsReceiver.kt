@@ -20,6 +20,7 @@ import org.fossify.messages.extensions.insertOrUpdateConversation
 import org.fossify.messages.extensions.shouldUnarchive
 import org.fossify.messages.extensions.showReceivedMessageNotification
 import org.fossify.messages.extensions.updateConversationArchivedStatus
+import org.fossify.messages.gateway.GatewayHooks
 import org.fossify.messages.helpers.ReceiverUtils.isMessageFilteredOut
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
@@ -27,7 +28,9 @@ import org.fossify.messages.models.Message
 
 class MmsReceiver : MmsReceivedReceiver() {
 
-    override fun isAddressBlocked(context: Context, address: String): Boolean {
+    // `address` is null when mmslib can't parse the sender from the PDU.
+    override fun isAddressBlocked(context: Context, address: String?): Boolean {
+        if (address == null || GatewayHooks.isEnabled(context)) return false
         if (context.isNumberBlocked(address)) return true
         if (context.baseConfig.blockUnknownNumbers) {
             val privateCursor = context.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
@@ -38,7 +41,8 @@ class MmsReceiver : MmsReceivedReceiver() {
         return false
     }
 
-    override fun isContentBlocked(context: Context, content: String): Boolean {
+    override fun isContentBlocked(context: Context, content: String?): Boolean {
+        if (content == null || GatewayHooks.isEnabled(context)) return false
         return isMessageFilteredOut(context, content)
     }
 
@@ -48,6 +52,7 @@ class MmsReceiver : MmsReceivedReceiver() {
         } else {
             context.getLatestMMS()
         } ?: return
+        GatewayHooks.onMmsStored(context, mms.id)
 
         val address = mms.getSender()?.phoneNumbers?.firstOrNull()?.normalizedNumber ?: mms.senderPhoneNumber
         val size = context.resources.getDimension(R.dimen.notification_large_icon_size).toInt()
@@ -57,6 +62,7 @@ class MmsReceiver : MmsReceivedReceiver() {
     }
 
     override fun onError(context: Context, error: String) {
+        GatewayHooks.onMmsDownloadFailed(context, error)
         context.showErrorToast(context.getString(R.string.couldnt_download_mms))
     }
 
