@@ -101,7 +101,7 @@ class ApiFixture(allowNullConfig: Boolean = false) : AutoCloseable {
     override fun close() = server.close()
 }
 
-class InMemoryOutboundStore : OutboundStore {
+open class InMemoryOutboundStore : OutboundStore {
     val jobs = ConcurrentHashMap<String, OutboundJob>()
 
     override fun get(id: String) = jobs[id]
@@ -117,7 +117,7 @@ class InMemoryOutboundStore : OutboundStore {
         return next
     }
 
-    override fun dueConfirmations(now: Long, limit: Int) =
+    override fun dueConfirmations(now: Long, limit: Int): List<OutboundJob> =
         jobs.values.filter { it.confirm == ConfirmState.PENDING && it.nextConfirmAt <= now }.take(limit)
 
     override fun dueDeliveryReports(now: Long, limit: Int) = jobs.values.filter {
@@ -157,6 +157,9 @@ class InMemoryInboundStore : InboundStore {
     }
 
     override fun contains(id: String) = events.containsKey(id)
+
+    override fun containsSource(sourceType: String, sourceId: Long) =
+        events.values.any { it.sourceType == sourceType && it.sourceId == sourceId }
 
     override fun pending(limit: Int) = events.values
         .filter { it.state == InboundState.PENDING }

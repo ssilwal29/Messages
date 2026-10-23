@@ -43,6 +43,7 @@ class GatewaySender(
     private val context: Context,
     private val settings: GatewaySettings,
     private val reader: ProviderReader,
+    private val handles: () -> Handles,
 ) : OutboundSender {
 
     override fun blockedReason(): String? = when {
@@ -69,7 +70,9 @@ class GatewaySender(
         if (job.body.isEmpty()) throw SendException("empty text", permanent = true)
         return when (job.type) {
             TYPE_SMS -> {
-                val destination = threadAddresses.single()
+                // The recipient check passed, so exactly one address is left once the phone's own are removed.
+                val (normalizer, own) = handles()
+                val destination = threadAddresses.single { normalizer.normalize(it) !in own }
                 val subId = settings.subscriptionId
                 val uri = try {
                     context.messagingUtils.insertSmsMessage(
@@ -86,6 +89,8 @@ class GatewaySender(
                 PreparedSend(uri.toString(), parts.coerceAtLeast(1), listOf(destination))
             }
 
+            // All stored addresses, own number included if the thread has it, so the provider files the MMS in
+            // this same thread.
             TYPE_MMS -> PreparedSend(null, 1, threadAddresses)
             else -> throw SendException("unknown type ${job.type}", permanent = true)
         }

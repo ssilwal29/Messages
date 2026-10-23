@@ -40,7 +40,7 @@ abstract class GatewayDatabase : RoomDatabase() {
 
 @Entity(
     tableName = "inbound_events",
-    indices = [Index(value = ["state", "received_at"])],
+    indices = [Index(value = ["state", "received_at"]), Index(value = ["source_type", "source_id"])],
 )
 data class InboundEventEntity(
     @PrimaryKey val id: String,
@@ -117,6 +117,9 @@ interface InboundDao {
 
     @Query("SELECT COUNT(*) > 0 FROM inbound_events WHERE id = :id")
     fun exists(id: String): Boolean
+
+    @Query("SELECT COUNT(*) > 0 FROM inbound_events WHERE source_type = :sourceType AND source_id = :sourceId")
+    fun existsSource(sourceType: String, sourceId: Long): Boolean
 
     @Query(
         "SELECT * FROM inbound_events WHERE state = 'PENDING' ORDER BY received_at, source_type, source_id " +
@@ -197,7 +200,7 @@ interface OutboundDao {
 
     @Query(
         "DELETE FROM outbound_jobs WHERE updated_at < :before AND state IN ('SENT', 'FAILED', 'DELIVERED') " +
-            "AND confirm IN ('DONE', 'REJECTED') AND delivery != 'PENDING'"
+            "AND confirm = 'DONE' AND delivery != 'PENDING'"
     )
     fun prune(before: Long)
 }

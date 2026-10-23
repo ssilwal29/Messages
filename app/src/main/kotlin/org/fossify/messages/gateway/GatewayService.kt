@@ -60,7 +60,11 @@ class GatewayService : Service() {
     private var pendingScan: ScheduledFuture<*>? = null
     private var pendingNotification: ScheduledFuture<*>? = null
 
-    private val statusListener: () -> Unit = { updateNotificationSoon() }
+    private val statusListener: () -> Unit = {
+        // A 401 on any route stops the stream too, not just the next request.
+        if (gateway.status.tokenRejected && gateway.api.isStopped) doorbell.stop()
+        updateNotificationSoon()
+    }
 
     private val doorbellListener = object : Doorbell.Listener {
         override fun onReady() {
@@ -90,6 +94,9 @@ class GatewayService : Service() {
         }
         started = true
         running = true
+        // Left over if the process died mid-fallback.
+        gateway.status.longPolling = false
+        gateway.status.doorbell = DoorbellState.STOPPED
 
         timers = Executors.newSingleThreadScheduledExecutor { Thread(it, "gateway-timers") }
         doorbellExecutor = Executors.newSingleThreadScheduledExecutor { Thread(it, "gateway-doorbell") }
@@ -120,7 +127,6 @@ class GatewayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (started && intent?.action == ACTION_CONFIG_CHANGED) {
-            gateway.onConfigChanged()
             doorbell.stop()
             doorbell.start()
             gateway.requestDrain()

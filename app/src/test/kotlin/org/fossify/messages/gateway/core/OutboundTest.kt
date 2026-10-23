@@ -128,14 +128,38 @@ class OutboundTest {
     }
 
     @Test
-    fun `transient failure with nothing sent is sent again when the server retries`() {
+    fun `a failed id handed out again is never sent again, even after a transient failure`() {
         processor.handle(mms("a"))
-        processor.onMmsSent("a", "content://mms/9", SendError("MMS result 2 (no data network)", permanent = false))
+        // A transient code doesn't prove nothing went out: an MMSC 5xx can come after delivery.
+        val error = SendError("MMS result 4 (HTTP failure), HTTP 503", permanent = false)
+        processor.onMmsSent("a", "content://mms/9", error)
         assertEquals(ConfirmState.DONE, store.get("a")!!.confirm)
 
-        assertEquals(OutboundProcessor.Handled.DISPATCHED, processor.handle(mms("a")))
-        assertEquals(2, sender.dispatched.size)
-        assertEquals(2, store.get("a")!!.sendAttempts)
+        assertEquals(OutboundProcessor.Handled.RECONFIRMED, processor.handle(mms("a")))
+        assertEquals(1, sender.dispatched.size)
+        assertEquals(2, confirmations().size)
+        assertTrue(confirmations().last().bodyText().contains("\"permanent\":false"))
+    }
+
+    @Test
+    fun `a 400 on a late duplicate confirm doesn't undo an accepted one`() {
+        // Another thread read the job while it was still PENDING and confirms it again after this one succeeded.
+        var stale: OutboundJob? = null
+        val racyStore = object : InMemoryOutboundStore() {
+            override fun dueConfirmations(now: Long, limit: Int) = listOfNotNull(stale.also { stale = null })
+        }
+        val racy = OutboundProcessor(racyStore, fixture.api, sender, handlesFor(), status, clock, noJitter())
+        var calls = 0
+        fixture.routes.on("POST", "/v1/devices/outbox/") { if (calls++ == 0) json(200) else json(400) }
+
+        racy.handle(OutboxMessage("s", "7", TYPE_SMS, listOf("+15551234567"), "hi"))
+        stale = racyStore.get("s")!!.copy(state = OutboundState.SENT, confirm = ConfirmState.PENDING)
+        racy.onSmsPartSent("s", "content://sms/100", null)
+        assertEquals(ConfirmState.DONE, racyStore.get("s")!!.confirm)
+
+        racy.flush()
+        assertEquals(2, calls)
+        assertEquals(ConfirmState.DONE, racyStore.get("s")!!.confirm)
     }
 
     @Test

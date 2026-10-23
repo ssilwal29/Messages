@@ -37,11 +37,15 @@ data class AttachmentRecord(
 
 data class InboundStats(val pending: Int, val oldestPendingReceivedAt: Long?)
 
+@Suppress("TooManyFunctions")
 interface InboundStore {
     /** Inserts the event and its attachments unless an event with that id exists. Returns false if it existed. */
     fun enqueue(event: InboundRecord, attachments: List<AttachmentRecord>): Boolean
 
     fun contains(id: String): Boolean
+
+    /** Whether an event was already built from this provider row, under any id. */
+    fun containsSource(sourceType: String, sourceId: Long): Boolean
 
     /** Pending events, oldest first. */
     fun pending(limit: Int): List<InboundRecord>

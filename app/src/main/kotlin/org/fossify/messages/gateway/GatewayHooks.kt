@@ -25,8 +25,8 @@ object GatewayHooks {
 
     /** SmsReceiver, right after `insertNewSMS` returned [smsId], in the same background block. */
     fun onSmsStored(context: Context, smsId: Long) = ifEnabled(context, "received SMS") { gateway ->
+        // insertNewSMS returns 0 when the provider refused the row; then there is nothing stored to report.
         if (smsId > 0) gateway.scanner.enqueueSms(smsId)
-        // If the insert failed, the catch-up scan finds the row if it exists.
         gateway.requestUpload()
     }
 

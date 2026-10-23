@@ -54,7 +54,8 @@ All new code is in `org.fossify.messages.gateway`:
 
 **Inbound.** Receivers enqueue the event as soon as the provider has the row. `CatchUpScanner` re-reads the provider on service start, on a `content://mms-sms/` change (3 s debounce), from the watchdog, and on "Sync now". It reads past the highest uploaded SMS/MMS ids, and also re-reads the last 48 hours, so a row stored just before a crash isn't skipped.
 
-- The event id comes from the provider row (`sms:<_id>:<date>`, `mms:<_id>:<date*1000>`), so both paths produce the same id. Insertion is idempotent on that id.
+- The event id comes from the provider row (`sms:<_id>:<date>`, `mms:<_id>:<date*1000>`), so both paths produce the same id. Insertion is idempotent on that id, and every path also skips a provider row that already has an event. That covers the moment when mmslib rewrites a new MMS's date right after storing it.
+- The receivers don't wait for a running catch-up scan, so an SMS broadcast is never held up long enough to be redelivered.
 - Messages dated before the gateway was switched on are never reported, so turning it on doesn't upload the phone's history or restored backups.
 - Messages whose sender is one of the phone's own numbers are dropped, and only downloaded inbox MMS (M-Retrieve.conf) count.
 - MMS sender and participants come from the `addr` rows: FROM, TO and CC, without own numbers.
@@ -66,7 +67,9 @@ All new code is in `org.fossify.messages.gateway`:
 **Outbound.** `OutboundProcessor` keeps a row per outbox id in `outbound_jobs`, moving `received` → `checked` → `sending` → `sent`/`failed`, then `delivered`.
 
 - The row is inserted before anything happens. It is marked `sending` before the provider or the radio is touched.
-- An id handed out again while `sending` or later is never sent again: its known result is confirmed again, or the gateway keeps waiting.
+- An id handed out again while `sending` or later is never sent again, whatever the outcome: its known result is confirmed again, or the gateway keeps waiting.
+- Only one confirmation per id is on the wire at a time. A late duplicate answered with `400` can't undo an accepted one.
+- Rows whose confirmation the server rejected with `400` are never pruned, so the id can't come back as a new job.
 - A multipart SMS settles when every part has reported, and is `sent` only if all parts are OK.
 - Fossify asks for a delivery report on the last part only, so the first final report settles delivery. It is posted after the sent confirmation is accepted.
 - Confirmations and delivery reports that fail on the network stay in the table and are retried (5 s to 15 min backoff) every 30 s by the service and by the watchdog.
@@ -100,7 +103,7 @@ Otherwise the job fails permanently with a reason naming who is missing or extra
 - Each `ready` asks `DrainCoordinator` for a drain. The service and the watchdog share that coordinator, so only one drain runs, and a request during a drain makes it go round once more.
 - A drain stops when the outbox is empty, or when the server hands out only ids already handled in that drain, so it can't spin.
 
-**A judgement call to confirm with the server side.** When a job failed *transiently*, *no part went out*, and the server *accepted* that failure, a re-handout of the same id is the server's own retry ("up to six attempts"), so it is sent again. Without this the server's retries could never work. In every other case a re-handout re-confirms the known result. If the server gives retries a new id instead, this path is simply never taken.
+**For the server side: retries need a new id.** The phone never sends an id twice once it reached `sending`, and that includes jobs that failed with `permanent:false`. A transient code doesn't prove nothing went out: an MMSC 5xx, an MMS I/O error or an SMS generic failure can all come after the message was delivered. So when the server hands out a failed id again, the phone confirms the same failure again. For the server's "up to six attempts" to resend anything, each retry must come as a new outbox id.
 
 **Foreground service type: `remoteMessaging`.**
 
@@ -118,7 +121,7 @@ If the app is distributed through Google Play, the declared use must match Play'
 - **Wake lock.** A partial wake lock is held only while a send is handed to the platform.
 - **Default SMS role.** Losing it pauses sending (the outbox isn't even fetched). Reporting continues from the provider. The notification and operator screen show it, and getting the role back triggers a drain.
 
-**401.** All traffic stops (`GatewayApi` refuses every call, and the doorbell stops). This holds across restarts until a new token is saved.
+**401.** All traffic stops: `GatewayApi` refuses every call, and an open doorbell stream is closed. This holds across restarts, and saving the form without a new token doesn't lift it.
 
 **404 on new routes** (heartbeat, thread list, attachments). The feature turns off and is retried an hour later. This is shown on the operator screen.
 
@@ -130,20 +133,31 @@ If the app is distributed through Google Play, the declared use must match Play'
 - No `Origin` header is sent (the client also removes one explicitly).
 - `GatewayLog` writes nothing in release builds. In debug builds it logs exception types only, never message text, numbers or the token. Fossify has no crash reporter.
 
+## Review
+
+An independent review of the first version found three ways an id could be sent twice, a crash, and smaller issues. All are fixed in the second commit:
+
+- **Duplicate sends.** A transient failure is no longer resent when the server hands its id out again. Rows with a rejected confirmation are no longer pruned. A late duplicate confirm can't turn an accepted one into "rejected".
+- **Crash.** OkHttp's cancel callback, arriving after the doorbell's executor shut down, no longer crashes the process.
+- **SMS broadcasts.** The SMS receiver no longer waits behind a long catch-up scan.
+- **Own number in an SMS thread.** An SMS thread that stores the phone's own number no longer fails every send.
+- **Two ids for one MMS.** Provider-row dedup stops a new MMS being reported under two ids.
+- **Smaller fixes.** The 401 stop is only lifted by a new token. A stale "polling" status is cleared when the service starts.
+
 ## Tests
 
 ### What ran here
 
 This container can't build the app: the network policy blocks `dl.google.com` (the Android SDK and Google Maven, which `maven.google.com` redirects to) and `jitpack.io` (`fossify.commons`, `mmslib`). So:
 
-1. **Core unit and HTTP tests: 61 tests, 0 failures.** They run in a scratch JVM Gradle project that compiles `gateway/core` and `src/test` straight from this tree against the same library versions.
+1. **Core unit and HTTP tests: 62 tests, 0 failures.** They run in a scratch JVM Gradle project that compiles `gateway/core` and `src/test` straight from this tree against the same library versions.
    - Pure tests: event-id stability; E.164 (national format, `00` from DE/FR and from a US SIM, short codes, alphanumeric senders, email); MMS sender and participants from `addr` rows; the recipient check (equal, extra person, missing person, own number in the thread, own number in recipients, wrong type for the count, missing thread, duplicates).
-   - State machine: id handed out again while sending, `404` on confirm, `401` stopping everything and resuming after a new token, multipart, the server-retry rule, stale jobs.
+   - State machine: id handed out again while sending, after it was sent, and after a transient failure (re-confirmed, never resent); `404` on confirm; a late duplicate confirm answered `400`; `401` stopping everything and resuming after a new token; multipart; stale jobs.
    - MockWebServer tests: event batching (100 per batch and 1 MB), `500` retrying the same batch, `400` isolation, attachments PUT before their event (with `:` URL-encoded), doorbell `ready`, reconnect, fallback to long polling and back, `401`, reconnect on network return, drain until empty, drain stopping on repeated ids, `wait=20`, exact confirm bodies with no extra fields, explicit nulls in the heartbeat, and the 2.9 fallbacks for attachments, heartbeat and thread list.
 2. **Typecheck of the Android layer.** The whole `gateway` package, plus the real modified `SmsSender.kt`, `MessagingUtils.kt` and all six modified receivers, compiles with `kotlinc` against the real Android 16 framework jar (Robolectric's `android-all`). androidx, Room, WorkManager, commons and mmslib were stubbed from their sources. `R` and the view binding were generated from this branch's XML, so resource ids and strings are checked too. Not covered: Room's KSP query validation, `SettingsActivity.kt`, and the real AGP/aapt2 build.
 3. **Detekt with the project's `detekt.yml`** (including the Compose rules plugin): clean on the gateway package and tests, and on every modified Fossify file against `app/detekt-baseline.xml`.
 
-The brief asked for the MockWebServer tests to be **instrumented**. They are local JVM tests (`app/src/test`, `./gradlew testFossDebugUnitTest`) because the code they exercise has no Android dependency. That runs the same code without a device, including in CI. OkHttp's Android build fails off-device, so `app/build.gradle.kts` gives the unit-test runtime classpath `okhttp-jvm` instead. I checked that the substitution resolves (okhttp, okhttp-sse and mockwebserver3 all land on `okhttp-jvm`) and that the 61 tests pass with it in the scratch project. It has **not** been run inside AGP, where the configuration name could differ; the block matches both `…UnitTestRuntimeClasspath` and `…HostTestRuntimeClasspath`.
+The brief asked for the MockWebServer tests to be **instrumented**. They are local JVM tests (`app/src/test`, `./gradlew testFossDebugUnitTest`) because the code they exercise has no Android dependency. That runs the same code without a device, including in CI. OkHttp's Android build fails off-device, so `app/build.gradle.kts` gives the unit-test runtime classpath `okhttp-jvm` instead. I checked that the substitution resolves (okhttp, okhttp-sse and mockwebserver3 all land on `okhttp-jvm`) and that the tests pass with it in the scratch project. It has **not** been run inside AGP, where the configuration name could differ; the block matches both `…UnitTestRuntimeClasspath` and `…HostTestRuntimeClasspath`.
 
 ### Still to do on a real build
 
@@ -184,6 +198,7 @@ The operator screen's "Last error" shows a message when a group MMS reply is fil
 ## Known limitations
 
 - `Transaction.settings` in mmslib is static. Sends are serialised around it, but anything else in the process that reads it during a send (mmslib's own download path) still sees the gateway's settings.
-- An MMS's provider `date` is rewritten right after the row is inserted. A catch-up scan landing exactly between the two writes would build a second id for that message. The content-observer path waits 3 s, so only a scan by coincidence could hit this window.
+- Fossify's `getSmsManager` caches one `SmsManager` globally, without a lock. A send from Fossify's UI on another SIM at the same instant as a gateway SMS could hand the gateway the wrong SIM. This is Fossify code; it only matters on a dual-SIM phone used for manual sends too.
+- If an MMS has no usable sender (FROM row blank or a placeholder), it isn't reported. The operator screen shows it as the last error.
 - While the gateway is on, Fossify still hides conversations with blocked numbers from its list (`getConversations`). Those messages are still stored and reported. Unblock numbers before relying on the operator view.
 - The operator screen's status lines are English only.

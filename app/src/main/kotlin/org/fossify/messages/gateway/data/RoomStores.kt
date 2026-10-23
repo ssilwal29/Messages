@@ -30,6 +30,8 @@ class RoomInboundStore(private val db: GatewayDatabase, private val clock: Clock
 
     override fun contains(id: String) = dao.exists(id)
 
+    override fun containsSource(sourceType: String, sourceId: Long) = dao.existsSource(sourceType, sourceId)
+
     override fun pending(limit: Int) = dao.pending(limit).map { it.toRecord() }
 
     override fun attachments(eventId: String) = dao.attachments(eventId).map { it.toRecord() }

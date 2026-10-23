@@ -4,6 +4,7 @@ import okhttp3.Response
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -107,9 +108,14 @@ class Doorbell(
         )
     }
 
+    /** Runs an OkHttp callback on [executor], unless it belongs to an old connection or we have shut down. */
     private fun onMine(myGeneration: Int, block: () -> Unit) {
-        executor.execute {
-            if (myGeneration == generation && state != DoorbellState.STOPPED) block()
+        try {
+            executor.execute {
+                if (myGeneration == generation && state != DoorbellState.STOPPED) block()
+            }
+        } catch (_: RejectedExecutionException) {
+            // Cancelling the stream on shutdown calls onFailure after the executor stopped; nothing to do.
         }
     }
 

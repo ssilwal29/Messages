@@ -157,7 +157,7 @@ class GatewayActivity : SimpleActivity() {
         binding.gatewayToken.text?.clear()
         showTokenHint()
 
-        gateway.onConfigChanged()
+        gateway.onConfigChanged(newToken = newToken.isNotEmpty())
         if (settings.enabled) GatewayService.start(this, GatewayService.ACTION_CONFIG_CHANGED)
         toast(R.string.gateway_saved)
         return true

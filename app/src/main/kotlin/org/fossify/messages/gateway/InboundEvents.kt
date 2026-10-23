@@ -16,6 +16,7 @@ import org.fossify.messages.gateway.core.InboundUploader
 import org.fossify.messages.gateway.core.MmsAddresses
 import org.fossify.messages.gateway.core.OwnNumbers
 import org.fossify.messages.gateway.core.Participant
+import org.fossify.messages.gateway.core.StatusSink
 import org.fossify.messages.gateway.core.ThreadInfo
 import org.fossify.messages.gateway.core.ThreadsSnapshot
 import org.fossify.messages.gateway.core.TYPE_MMS
@@ -29,6 +30,7 @@ class InboundEventFactory(
     private val context: Context,
     private val reader: ProviderReader,
     private val handles: () -> Handles,
+    private val status: StatusSink,
     private val clock: Clock = Clock.SYSTEM,
 ) {
     class Built(val record: InboundRecord, val attachments: List<AttachmentRecord>, val isGroup: Boolean)
@@ -55,7 +57,11 @@ class InboundEventFactory(
     fun fromMms(row: ProviderReader.MmsRow): Built? {
         val (normalizer, own) = handles()
         val parties = MmsAddresses.parse(reader.mmsAddresses(row.id), normalizer, own)
-        val from = parties.from?.takeIf { it.isNotEmpty() } ?: return null
+        val from = parties.from?.takeIf { it.isNotEmpty() }
+        if (from == null) {
+            status.recordError("MMS ${row.id} in thread ${row.threadId} has no usable sender; not reported")
+            return null
+        }
         if (from in own) return null
 
         val id = EventIds.mms(row.id, row.dateMillis)
@@ -161,48 +167,58 @@ class CatchUpScanner(
     private val onNewGroupThread: () -> Unit,
     private val clock: Clock = Clock.SYSTEM,
 ) {
-    @Synchronized
-    fun scan(): Int {
+    /**
+     * Only one scan at a time. The receivers' [enqueueSms]/[enqueueMms] don't wait for it (an SMS broadcast must
+     * finish quickly): inserting is idempotent, and every path skips a provider row that already has an event.
+     * That also covers an MMS whose date mmslib rewrites right after storing it, which would otherwise give the
+     * same row two ids.
+     */
+    private val scanLock = Any()
+    private val groupThreadsLock = Any()
+
+    fun scan(): Int = synchronized(scanLock) {
         if (!settings.enabled) return 0
         val since = settings.enabledAt
         val recent = clock.now() - LOOKBACK_MILLIS
         var added = 0
         reader.inboxSms(since, settings.smsCursor, recent).forEach { row ->
-            if (!store.contains(EventIds.sms(row.id, row.date)) && enqueue(factory.fromSms(row))) added++
+            if (!store.containsSource(TYPE_SMS, row.id) && enqueue(factory.fromSms(row))) added++
         }
         reader.inboxMms(since, settings.mmsCursor, recent).forEach { row ->
-            if (!store.contains(EventIds.mms(row.id, row.dateMillis)) && enqueue(factory.fromMms(row))) added++
+            if (!store.containsSource(TYPE_MMS, row.id) && enqueue(factory.fromMms(row))) added++
         }
-        return added
+        added
     }
 
     /** From SmsReceiver, right after the message is stored. */
-    @Synchronized
     fun enqueueSms(id: Long): Boolean {
         val row = reader.sms(id)?.takeIf { it.isInbox } ?: return false
-        return row.date >= settings.enabledAt && enqueue(factory.fromSms(row))
+        if (row.date < settings.enabledAt || store.containsSource(TYPE_SMS, row.id)) return false
+        return enqueue(factory.fromSms(row))
     }
 
     /** From MmsReceiver, once the downloaded MMS is stored. */
-    @Synchronized
     fun enqueueMms(id: Long): Boolean {
         // Never report messages this phone sent: only downloaded inbox MMS.
         val row = reader.mms(id)?.takeIf { it.isInbox } ?: return false
-        return row.dateMillis >= settings.enabledAt && enqueue(factory.fromMms(row))
+        if (row.dateMillis < settings.enabledAt || store.containsSource(TYPE_MMS, row.id)) return false
+        return enqueue(factory.fromMms(row))
     }
 
     private fun enqueue(built: InboundEventFactory.Built?): Boolean {
         built ?: return false
         val added = store.enqueue(built.record, built.attachments)
-        if (added && built.isGroup) {
-            val known = settings.knownGroupThreads
-            val thread = built.record.threadId.toString()
-            if (thread !in known) {
-                settings.knownGroupThreads = known + thread
-                onNewGroupThread()
-            }
-        }
+        if (added && built.isGroup) noteGroupThread(built.record.threadId)
         return added
+    }
+
+    private fun noteGroupThread(threadId: Long) {
+        val isNew = synchronized(groupThreadsLock) {
+            val known = settings.knownGroupThreads
+            val thread = threadId.toString()
+            (thread !in known).also { if (it) settings.knownGroupThreads = known + thread }
+        }
+        if (isNew) onNewGroupThread()
     }
 
     companion object {

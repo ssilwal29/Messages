@@ -62,7 +62,7 @@ class Gateway private constructor(context: Context) {
         status.recordError("the server rejected the token (401); enter a new one")
     })
 
-    val sender = GatewaySender(app, settings, reader)
+    val sender = GatewaySender(app, settings, reader, ::handles)
     val processor = OutboundProcessor(outboundStore, api, sender, ::handles, status)
     val drainer = OutboxDrainer(api, processor, status)
 
@@ -70,7 +70,7 @@ class Gateway private constructor(context: Context) {
     val drainLock = DrainCoordinator()
 
     val reporters = Reporters(api, features, status)
-    val events = InboundEventFactory(app, reader, ::handles)
+    val events = InboundEventFactory(app, reader, ::handles, status)
     val scanner = CatchUpScanner(settings, reader, events, inboundStore, onNewGroupThread = { requestThreads() })
 
     val uploader = InboundUploader(
@@ -202,11 +202,13 @@ class Gateway private constructor(context: Context) {
     /** True when the thread list is due: every 6 hours, or hourly while the route is missing. */
     fun threadsDue(now: Long) = now - settings.lastThreadsSentAt >= THREADS_INTERVAL_MILLIS
 
-    /** After the operator saves a new token or URL. */
-    fun onConfigChanged() {
+    /** After the operator saves the form. Only a new token lifts a 401 stop. */
+    fun onConfigChanged(newToken: Boolean) {
         handlesCache = null
-        api.onNewToken()
-        status.tokenRejected = false
+        if (newToken) {
+            api.onNewToken()
+            status.tokenRejected = false
+        }
     }
 
     /** Turning the gateway on reports messages from now on only, never the phone's history. */

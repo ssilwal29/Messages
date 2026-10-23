@@ -1,5 +1,7 @@
 package org.fossify.messages.gateway.core
 
+import java.util.concurrent.ConcurrentHashMap
+
 /** `received` → `checked` → `sending` → `sent` or `failed`; `sent` → `delivered`. */
 enum class OutboundState {
     RECEIVED, CHECKED, SENDING, SENT, FAILED, DELIVERED;
@@ -104,12 +106,10 @@ sealed interface DeliveryOutcome {
  * The outbound state machine (contract 2.3–2.5 and "Outbound" in the design):
  * - a job is inserted before anything is sent;
  * - it is marked `sending` before the provider or the radio is touched, so an id handed out again while it is
- *   `sending` or later is never sent again: its known result is confirmed again, or we keep waiting for it;
+ *   `sending` or later is never sent again: its known result is confirmed again, or we keep waiting for it.
+ *   That includes transient failures: a failure code doesn't prove nothing went out (an MMSC 5xx or an SMS
+ *   generic failure can come after delivery), so a server retry needs a new outbox id;
  * - confirmations and delivery reports that fail on the network stay queued here and are retried.
- *
- * One exception to "never again": a job that failed transiently, with no part sent, whose failure the server
- * accepted. When the server hands that id out again it is the server's own retry (it retries `permanent:false`
- * failures up to six times), and nothing went out the first time, so it is sent again.
  */
 @Suppress("TooManyFunctions")
 class OutboundProcessor(
@@ -152,32 +152,8 @@ class OutboundProcessor(
                 Handled.WAITING
             }
 
-            OutboundState.SENT, OutboundState.DELIVERED -> reconfirm(job)
-            OutboundState.FAILED -> if (isServerRetry(job)) retry(job) else reconfirm(job)
+            OutboundState.SENT, OutboundState.DELIVERED, OutboundState.FAILED -> reconfirm(job)
         }
-    }
-
-    private fun isServerRetry(job: OutboundJob) =
-        job.confirm == ConfirmState.DONE && !job.permanent && job.partsOk == 0
-
-    private fun retry(job: OutboundJob): Handled {
-        val reset = store.update(job.id) {
-            if (it.state != OutboundState.FAILED || !isServerRetry(it)) return@update null
-            it.copy(
-                state = OutboundState.RECEIVED,
-                providerUri = null,
-                partsTotal = 0,
-                partsOk = 0,
-                partsFailed = 0,
-                sendingSince = 0,
-                lastError = null,
-                confirm = ConfirmState.NONE,
-                confirmAttempts = 0,
-                nextConfirmAt = 0,
-                updatedAt = clock.now(),
-            )
-        } ?: return Handled.WAITING
-        return checkAndSend(reset)
     }
 
     private fun reconfirm(job: OutboundJob): Handled {
@@ -374,9 +350,20 @@ class OutboundProcessor(
         }
     }
 
+    /** Ids with a confirmation on the wire: the service, the watchdog and the receivers may all try at once. */
+    private val confirming: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     /** Returns false only when traffic must stop (401 or not configured). */
     private fun confirm(job: OutboundJob): Boolean {
-        if (job.confirm != ConfirmState.PENDING) return true
+        if (job.confirm != ConfirmState.PENDING || !confirming.add(job.id)) return true
+        try {
+            return confirmNow(job)
+        } finally {
+            confirming.remove(job.id)
+        }
+    }
+
+    private fun confirmNow(job: OutboundJob): Boolean {
         val result = when (job.state) {
             OutboundState.SENT, OutboundState.DELIVERED -> api.confirmSent(job.id, job.providerUri.orEmpty())
             OutboundState.FAILED -> api.confirmFailed(job.id, job.lastError ?: "send failed", job.permanent)
@@ -392,13 +379,17 @@ class OutboundProcessor(
 
             ApiResult.Unauthorized, ApiResult.NotConfigured -> false
             is ApiResult.BadRequest -> {
-                store.update(job.id) { it.copy(confirm = ConfirmState.REJECTED, updatedAt = now) }
+                store.update(job.id) {
+                    if (it.confirm != ConfirmState.PENDING) return@update null
+                    it.copy(confirm = ConfirmState.REJECTED, updatedAt = now)
+                }
                 status.recordError("confirm for reply ${job.id} rejected: ${result.message}")
                 true
             }
 
             is ApiResult.HttpError, is ApiResult.NetworkError -> {
                 store.update(job.id) {
+                    if (it.confirm != ConfirmState.PENDING) return@update null
                     it.copy(
                         confirmAttempts = it.confirmAttempts + 1,
                         nextConfirmAt = now + backoff.delayFor(it.confirmAttempts),
