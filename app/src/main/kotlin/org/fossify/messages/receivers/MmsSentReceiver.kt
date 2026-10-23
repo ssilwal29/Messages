@@ -12,6 +12,7 @@ import android.widget.Toast
 import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.extensions.toast
 import org.fossify.messages.extensions.deleteMessage
+import org.fossify.messages.gateway.GatewayHooks
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.messaging.getMmsSendingError
@@ -54,6 +55,7 @@ class MmsSentReceiver : SendStatusReceiver() {
         if (filePath != null) {
             File(filePath).delete()
         }
+        GatewayHooks.onMmsSent(context, intent, receiverResultCode)
     }
 
     override fun updateAppDatabase(context: Context, intent: Intent, receiverResultCode: Int) {

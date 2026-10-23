@@ -22,6 +22,7 @@ import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.shouldUnarchive
 import org.fossify.messages.extensions.showReceivedMessageNotification
 import org.fossify.messages.extensions.updateConversationArchivedStatus
+import org.fossify.messages.gateway.GatewayHooks
 import org.fossify.messages.helpers.ReceiverUtils.isMessageFilteredOut
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
@@ -45,13 +46,16 @@ class SmsReceiver : BroadcastReceiver() {
                 val status = parts.last().status
                 val body = buildString { parts.forEach { append(it.messageBody.orEmpty()) } }
 
-                if (isMessageFilteredOut(appContext, body)) return@ensureBackgroundThread
-                if (appContext.isNumberBlocked(address)) return@ensureBackgroundThread
-                if (appContext.baseConfig.blockUnknownNumbers) {
-                    val privateCursor =
-                        appContext.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
-                    val result = SimpleContactsHelper(appContext).existsSync(address, privateCursor)
-                    if (result == ContactLookupResult.NotFound) return@ensureBackgroundThread
+                // Dude Gateway: every received message must be stored and reported, so no filtering while it's on.
+                if (!GatewayHooks.isEnabled(appContext)) {
+                    if (isMessageFilteredOut(appContext, body)) return@ensureBackgroundThread
+                    if (appContext.isNumberBlocked(address)) return@ensureBackgroundThread
+                    if (appContext.baseConfig.blockUnknownNumbers) {
+                        val privateCursor =
+                            appContext.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
+                        val result = SimpleContactsHelper(appContext).existsSync(address, privateCursor)
+                        if (result == ContactLookupResult.NotFound) return@ensureBackgroundThread
+                    }
                 }
 
                 val date = System.currentTimeMillis()
@@ -99,6 +103,7 @@ class SmsReceiver : BroadcastReceiver() {
             type = type,
             subscriptionId = subscriptionId
         )
+        GatewayHooks.onSmsStored(context, newMessageId)
 
         context.getConversations(threadId).firstOrNull()?.let { conv ->
             runCatching { context.insertOrUpdateConversation(conv) }

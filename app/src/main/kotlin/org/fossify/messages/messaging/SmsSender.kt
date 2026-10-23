@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.telephony.PhoneNumberUtils
 import org.fossify.commons.helpers.isSPlus
+import org.fossify.messages.gateway.GatewayHooks
 import org.fossify.messages.messaging.SmsException.Companion.EMPTY_DESTINATION_ADDRESS
 import org.fossify.messages.messaging.SmsException.Companion.ERROR_SENDING_MESSAGE
 import org.fossify.messages.receivers.SendStatusReceiver
@@ -19,9 +20,10 @@ class SmsSender(val app: Application) {
     private val sendMultipartSmsAsSeparateMessages = false
 
     // This should be called from a RequestWriter queue thread
+    // gatewayOutboxId: set by Dude Gateway only, so its sent and delivered results can be matched to the reply.
     fun sendMessage(
         subId: Int, destination: String, body: String, serviceCenter: String?,
-        requireDeliveryReport: Boolean, messageUri: Uri
+        requireDeliveryReport: Boolean, messageUri: Uri, gatewayOutboxId: String? = null
     ) {
         var dest = destination
         if (body.isEmpty()) {
@@ -43,7 +45,7 @@ class SmsSender(val app: Application) {
         }
         // Actually send the sms
         sendInternal(
-            subId, dest, messages, serviceCenter, requireDeliveryReport, messageUri
+            subId, dest, messages, serviceCenter, requireDeliveryReport, messageUri, gatewayOutboxId
         )
     }
 
@@ -51,7 +53,7 @@ class SmsSender(val app: Application) {
     private fun sendInternal(
         subId: Int, dest: String,
         messages: ArrayList<String>, serviceCenter: String?,
-        requireDeliveryReport: Boolean, messageUri: Uri
+        requireDeliveryReport: Boolean, messageUri: Uri, gatewayOutboxId: String?
     ) {
         val smsManager = getSmsManager(subId)
         val messageCount = messages.size
@@ -71,7 +73,7 @@ class SmsSender(val app: Application) {
                     PendingIntent.getBroadcast(
                         app,
                         partId,
-                        getDeliveredStatusIntent(messageUri, subId),
+                        getDeliveredStatusIntent(messageUri, subId, gatewayOutboxId),
                         flags
                     )
                 )
@@ -82,7 +84,7 @@ class SmsSender(val app: Application) {
                 PendingIntent.getBroadcast(
                     app,
                     partId,
-                    getSendStatusIntent(messageUri, subId),
+                    getSendStatusIntent(messageUri, subId, gatewayOutboxId),
                     flags
                 )
             )
@@ -109,15 +111,17 @@ class SmsSender(val app: Application) {
         }
     }
 
-    private fun getSendStatusIntent(requestUri: Uri, subId: Int): Intent {
+    private fun getSendStatusIntent(requestUri: Uri, subId: Int, gatewayOutboxId: String?): Intent {
         val intent = Intent(SendStatusReceiver.SMS_SENT_ACTION, requestUri, app, SmsStatusSentReceiver::class.java)
         intent.putExtra(SendStatusReceiver.EXTRA_SUB_ID, subId)
+        gatewayOutboxId?.let { intent.putExtra(GatewayHooks.EXTRA_OUTBOX_ID, it) }
         return intent
     }
 
-    private fun getDeliveredStatusIntent(requestUri: Uri, subId: Int): Intent {
+    private fun getDeliveredStatusIntent(requestUri: Uri, subId: Int, gatewayOutboxId: String?): Intent {
         val intent = Intent(SendStatusReceiver.SMS_DELIVERED_ACTION, requestUri, app, SmsStatusDeliveredReceiver::class.java)
         intent.putExtra(SendStatusReceiver.EXTRA_SUB_ID, subId)
+        gatewayOutboxId?.let { intent.putExtra(GatewayHooks.EXTRA_OUTBOX_ID, it) }
         return intent
     }
 

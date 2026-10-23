@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dude Gateway strings. English only; kept out of strings.xml so upstream translations merge cleanly. -->
+<resources>
+    <string name="gateway_app_name">Dude Gateway</string>
+    <string name="gateway_title">Gateway</string>
+    <string name="gateway_settings_entry">Dude Gateway</string>
+    <string name="gateway_settings_entry_summary_on">On. Group MMS, delivery reports, blocking and keyword filters are managed by the gateway.</string>
+    <string name="gateway_settings_entry_summary_off">Off</string>
+
+    <string name="gateway_section_status">Status</string>
+    <string name="gateway_section_config">Connection</string>
+    <string name="gateway_section_phone">Phone</string>
+    <string name="gateway_sync_now">Sync now</string>
+    <string name="gateway_test_heartbeat">Send test heartbeat</string>
+    <string name="gateway_enabled">Gateway on</string>
+    <string name="gateway_base_url">Server URL</string>
+    <string name="gateway_base_url_hint">https://…</string>
+    <string name="gateway_token">Device token</string>
+    <string name="gateway_token_hint">Paste a new hd_… token</string>
+    <string name="gateway_token_saved">Saved: %s</string>
+    <string name="gateway_token_none">No token saved</string>
+    <string name="gateway_own_numbers">This phone\'s numbers (one per line, as registered)</string>
+    <string name="gateway_own_numbers_hint">+15551234567</string>
+    <string name="gateway_own_numbers_preview">Handles: %s</string>
+    <string name="gateway_sim">SIM to send from</string>
+    <string name="gateway_sim_none">Not chosen</string>
+    <string name="gateway_save">Save</string>
+    <string name="gateway_saved">Saved</string>
+    <string name="gateway_default_sms">Default SMS app</string>
+    <string name="gateway_battery">Battery optimisation</string>
+    <string name="gateway_yes">Yes</string>
+    <string name="gateway_no_tap">No. Tap to fix.</string>
+    <string name="gateway_battery_exempt">Not optimised</string>
+    <string name="gateway_battery_optimised">Optimised. Tap to exempt the gateway.</string>
+
+    <string name="gateway_error_url">Server URL: %s</string>
+    <string name="gateway_error_numbers">Enter this phone\'s own numbers</string>
+    <string name="gateway_error_sim">Choose the SIM to send from</string>
+    <string name="gateway_error_token">Paste the device token</string>
+    <string name="gateway_sync_started">Syncing…</string>
+    <string name="gateway_heartbeat_sent">Heartbeat sent</string>
+    <string name="gateway_heartbeat_result">Heartbeat: %s</string>
+
+    <string name="gateway_notification_channel">Gateway service</string>
+    <string name="gateway_notification_queue">" · in %1$d / out %2$d"</string>
+    <string name="gateway_doorbell_connected">Doorbell connected</string>
+    <string name="gateway_doorbell_reconnecting">Doorbell reconnecting</string>
+    <string name="gateway_doorbell_stopped">Stopped</string>
+    <string name="gateway_state_token_rejected">Token rejected. Enter a new one.</string>
+    <string name="gateway_state_long_polling">Doorbell down, polling the outbox</string>
+    <string name="gateway_state_not_default_sms">Not the default SMS app. Sending is paused.</string>
+</resources>

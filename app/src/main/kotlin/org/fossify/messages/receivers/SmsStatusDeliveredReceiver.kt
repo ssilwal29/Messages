@@ -9,6 +9,7 @@ import android.provider.Telephony.Sms
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.messagingUtils
+import org.fossify.messages.gateway.GatewayHooks
 import org.fossify.messages.helpers.refreshMessages
 
 /** Handles updating databases and states when a sent SMS message is delivered. */
@@ -57,6 +58,7 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
         }
 
         updateSmsStatusAndDateSent(context, messageUri, System.currentTimeMillis())
+        GatewayHooks.onSmsDelivered(context, intent, status)
     }
 
     private fun updateSmsStatusAndDateSent(context: Context, messageUri: Uri?, timeSentInMillis: Long = -1L) {

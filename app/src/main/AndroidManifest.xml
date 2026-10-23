@@ -17,6 +17,13 @@
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
 
+    <!-- Dude Gateway -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission
         android:name="android.permission.USE_BIOMETRIC"
@@ -34,7 +41,8 @@
         android:allowBackup="true"
         android:appCategory="productivity"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_launcher_name"
+        android:label="@string/gateway_app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/AppTheme">
 
@@ -177,6 +185,24 @@
 
         <service android:name="com.android.mms.transaction.TransactionService" />
 
+        <!-- Dude Gateway -->
+        <service
+            android:name=".gateway.GatewayService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+
+        <activity
+            android:name=".gateway.GatewayActivity"
+            android:configChanges="orientation"
+            android:exported="false"
+            android:label="@string/gateway_title"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <provider
+            android:name=".gateway.GatewayStartupProvider"
+            android:authorities="${applicationId}.gateway-startup"
+            android:exported="false" />
+
         <receiver android:name=".receivers.SmsStatusSentReceiver" />
 
         <receiver android:name=".receivers.SmsStatusDeliveredReceiver" />
@@ -254,7 +280,7 @@
         </provider>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Red"
+            android:name="app.thedude.gateway.activities.SplashActivity.Red"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_red"
@@ -268,7 +294,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Pink"
+            android:name="app.thedude.gateway.activities.SplashActivity.Pink"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_pink"
@@ -282,7 +308,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Purple"
+            android:name="app.thedude.gateway.activities.SplashActivity.Purple"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_purple"
@@ -296,7 +322,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Deep_purple"
+            android:name="app.thedude.gateway.activities.SplashActivity.Deep_purple"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_deep_purple"
@@ -310,7 +336,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Indigo"
+            android:name="app.thedude.gateway.activities.SplashActivity.Indigo"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_indigo"
@@ -324,7 +350,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Blue"
+            android:name="app.thedude.gateway.activities.SplashActivity.Blue"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_blue"
@@ -338,7 +364,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Light_blue"
+            android:name="app.thedude.gateway.activities.SplashActivity.Light_blue"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_light_blue"
@@ -352,7 +378,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Cyan"
+            android:name="app.thedude.gateway.activities.SplashActivity.Cyan"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_cyan"
@@ -366,7 +392,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Teal"
+            android:name="app.thedude.gateway.activities.SplashActivity.Teal"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_teal"
@@ -380,7 +406,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Green"
+            android:name="app.thedude.gateway.activities.SplashActivity.Green"
             android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
@@ -394,7 +420,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Light_green"
+            android:name="app.thedude.gateway.activities.SplashActivity.Light_green"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_light_green"
@@ -408,7 +434,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Lime"
+            android:name="app.thedude.gateway.activities.SplashActivity.Lime"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_lime"
@@ -422,7 +448,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Yellow"
+            android:name="app.thedude.gateway.activities.SplashActivity.Yellow"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_yellow"
@@ -436,7 +462,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Amber"
+            android:name="app.thedude.gateway.activities.SplashActivity.Amber"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_amber"
@@ -450,7 +476,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Orange"
+            android:name="app.thedude.gateway.activities.SplashActivity.Orange"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_orange"
@@ -463,7 +489,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Deep_orange"
+            android:name="app.thedude.gateway.activities.SplashActivity.Deep_orange"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_deep_orange"
@@ -477,7 +503,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Brown"
+            android:name="app.thedude.gateway.activities.SplashActivity.Brown"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_brown"
@@ -491,7 +517,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Blue_grey"
+            android:name="app.thedude.gateway.activities.SplashActivity.Blue_grey"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_blue_grey"
@@ -505,7 +531,7 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".activities.SplashActivity.Grey_black"
+            android:name="app.thedude.gateway.activities.SplashActivity.Grey_black"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_grey_black"
